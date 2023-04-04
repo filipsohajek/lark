@@ -1,0 +1,209 @@
+fn print_int(val: u32);
+
+fn factorial(x: u32) -> u32 {
+    let res: u32 = 0;
+    let i: u32 = 1;
+
+    while i <= x {
+        res = res * i;
+        i = i + 1;
+    }
+
+    return res;
+}
+
+fn main(args: str[]) -> u32 {
+    print_int(factorial(parse_u32(args[0])));
+}
+
+# Lexical Grammar
+u8
+u16
+u32
+u64
+i8
+i16
+i32
+i64
+char
+str
+[
+]
+*
+(
+)
+;
+{
+}
+:
+,
+=
+return
+while
+if
+else
+let
+||
+&&
+|
+&
+^
+==
+!=
+<=
+>=
+<
+>
++
+-
+*
+/
+%
+!
+
+
+
+
+PrimitiveType:
+    u8
+    u16
+    u32
+    u64
+    i8
+    i16
+    i32
+    i64
+    char
+    str
+
+Type:
+    BaseType [ ]
+    BaseType [ ConstantExpr ]
+    BaseType *
+
+BaseType:
+    PrimitiveType
+    Identifier
+
+Decl:
+    FnDecl
+    VarDecl
+
+FnHeader:
+    fn Ident ( FnArgList ) -> Type
+
+FnDecl:
+    FnHeader ;
+    FnHeader { StmtList }
+
+FnArgList:
+    FnArg
+    FnArg , FnArgList
+
+FnArg:
+    Ident : Type
+
+ArgList:
+    AssignExpr
+    AssignExpr , ArgList
+
+VarDecl:
+    let Ident : Type ;
+    let Ident = Expr ;
+    let Ident : Type = Expr ;
+
+WhileStmt:
+    while Expr { StmtList }
+
+IfStmt:
+    if Expr { StmtList }
+    if Expr { StmtList } else { StmtList }
+
+StmtList:
+    Stmt
+    Stmt StmtList
+
+ReturnStmt:
+    return Expr ;
+
+DeclStmt:
+    Decl
+
+ExprStmt:
+    Expr ;
+
+Stmt:
+    WhileStmt
+    ReturnStmt
+    DeclStmt
+    ExprStmt
+    IfStmt
+
+Expr:
+    AssignExpr
+
+AssignExpr:
+    OrOrExpr
+    OrOrExpr = AssignExpr
+
+ConstantExpr:
+    OrOrExpr
+
+OrOrExpr:
+    AndAndExpr
+    OrOrExpr || AndAndExpr
+
+AndAndExpr:
+    OrExpr
+    AndAndExpr && OrExpr
+
+OrExpr:
+    XorExpr
+    OrExpr | XorExpr
+
+XorExpr:
+    AndExpr
+    XorExpr ^ AndExpr
+
+AndExpr:
+    CmpExpr
+    AndExpr & CmpExpr
+
+CmpExpr:
+    AddExpr
+    AddExpr == AddExpr
+    AddExpr != AddExpr
+    AddExpr <= AddExpr
+    AddExpr >= AddExpr
+    AddExpr < AddExpr
+    AddExpr > AddExpr
+
+AddExpr:
+    MultExpr
+    AddExpr + MultExpr
+    AddExpr - MultExpr
+
+MultExpr:
+    UnaryExpr
+    MultExpr * UnaryExpr
+    MultExpr / UnaryExpr
+    MultExpr % UnaryExpr
+    
+UnaryExpr:
+    BaseExpr
+    - UnaryExpr
+    + UnaryExpr
+    & UnaryExpr
+    * UnaryExpr
+    ! UnaryExpr
+
+PostfixExpr:
+    BaseExpr
+    PostfixExpr [ Expr ]
+    PostfixExpr ( ArgList )
+
+BaseExpr:
+    ( Expr )
+    Identifier
+    IntegerLiteral
+    StringLiteral
