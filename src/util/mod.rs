@@ -1,3 +1,5 @@
+pub mod file;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use memmap::MmapMut;
