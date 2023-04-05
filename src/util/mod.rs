@@ -67,7 +67,7 @@ struct StrInterner {
 }
 
 impl StrInterner {
-    const BLOCK_SIZE: usize = 512;
+    const BLOCK_SIZE: usize = 4096;
 
     fn new() -> Self {
         Self {
