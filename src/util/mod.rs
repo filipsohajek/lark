@@ -1,13 +1,15 @@
 pub mod file;
+pub mod error;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use memmap::MmapMut;
 
 /// Represents a string interned in the thread local string interner.
 /// This is a convenience type for interfacing with the interner that allows interned strings
 /// to be treated similarly to other string types.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct InternedStr(usize);
 
 impl InternedStr {
@@ -25,9 +27,7 @@ impl InternedStr {
     ///
     /// Interned strings can be freely compared with each other through the PartialEq implementation.
     pub fn matches(&self, other: &str) -> bool {
-        STRING_INTERNER.with(|interner_ref| {
-            interner_ref.borrow().lookup(self.0).unwrap() == other
-        })
+        self.to_str() == other
     }
 
     /// Return a reference to the backing string in the interner.
@@ -40,6 +40,15 @@ impl InternedStr {
     }
 }
 
+
+impl Debug for InternedStr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InternedStr")
+            .field("index", &self.0)
+            .field("resolved", &self.to_str())
+            .finish()
+    }
+}
 
 /// An interner for strings (not thread-safe). Used to store identifiers encountered during lexing.
 ///
@@ -57,7 +66,7 @@ impl InternedStr {
 ///
 /// The interner bypasses the borrow checker and issues static-lifetime references to the interned
 /// strings. Care must be taken so that the interner survives all its issued interned strings. Thus
-/// it is not advisable to use the interner directly and to use the InternedStr API instead,
+/// it is not advisable to use the interner directly and to use the [InternedStr] API instead,
 /// which uses a thread-local interner.
 struct StrInterner {
     blocks: Vec<MmapMut>,
@@ -93,6 +102,7 @@ impl StrInterner {
 
         let top_block = self.blocks.last_mut().unwrap();
         let start_index = top_block.len() - self.remaining_top;
+        self.remaining_top -= length;
 
         std::mem::transmute::<&mut [u8], &mut [u8]>(&mut top_block[start_index..])
     }

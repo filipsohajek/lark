@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use memmap::MmapMut;
+use crate::lex::lexer::Lexer;
 
 /// Represents a slice of a file in the thread local SourceMap. The type is intentionally small
 /// (2x usize), as it's used in many places throughout the code.
@@ -21,6 +22,17 @@ impl Span {
         SOURCE_MAP.with(|sourcemap_ref| {
             sourcemap_ref.borrow_mut().load_file(path)
         })
+    }
+
+    // Copy a string buffer into the thread-local SourceMap and return the resulting Span.
+    pub fn new_from_buf(buffer: &str) -> std::io::Result<Span> {
+        SOURCE_MAP.with(|sourcemap_ref| {
+            sourcemap_ref.borrow_mut().load_buf(buffer)
+        })
+    }
+
+    pub fn lexer(&self) -> Lexer<'static> {
+        Lexer::new_from_span(self.clone())
     }
 
     /// Return a reference to the buffer the Span is referring to. Panics if the Span is invalid.
@@ -61,7 +73,7 @@ impl Span {
 /// buffers which span files, and thus the file boundaries may require special care when handling
 /// the global offset.
 ///
-/// The preferred way to interface with a SourceMap is to use the Span API, which uses a static
+/// The preferred way to interface with a SourceMap is to use the [Span] API, which uses a static
 /// thread-local SourceMap.
 #[derive(Debug)]
 struct SourceMap {
@@ -141,6 +153,22 @@ impl SourceMap {
                         .map(|file_mmap| file_mmap.len())
                         .sum(),
             length: self.files[file_id].len(),
+        })
+    }
+
+    /// Copy a string buffer into the SourceMap and return the corresponding Span.
+    fn load_buf(&mut self, buffer: &str) -> std::io::Result<Span> {
+        let mut new_map = MmapMut::map_anon(buffer.len())?;
+        new_map.copy_from_slice(buffer.as_bytes());
+        self.files.push(new_map);
+
+        Ok(Span {
+            offset: self.files
+                        .iter()
+                        .take(self.files.len() - 1)
+                        .map(|file_mmap| file_mmap.len())
+                        .sum(),
+            length: buffer.len(),
         })
     }
 }

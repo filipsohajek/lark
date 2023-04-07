@@ -43,6 +43,7 @@ while
 if
 else
 let
+fn
 ||
 &&
 |
@@ -207,3 +208,57 @@ BaseExpr:
     Identifier
     IntegerLiteral
     StringLiteral
+
+IntegerLiteral:
+    DecIntegerLiteral
+    HexIntegerLiteral
+
+DecIntegerLiteral:
+    Digit DecIntegerLiteral
+
+HexIntegerLiteral:
+    0x HexDigits
+
+HexDigits:
+    HexDigit HexDigits
+
+Digit:
+    0-9
+
+HexDigit:
+    0-9
+    a-f
+    A-F
+
+StringLiteral:
+    " StringChars "
+
+StringChars:
+    StringChar StringChars
+
+StringChar:
+    any character in the source character set except " and \
+    \ EscapeSequence
+
+EscapeSequence:
+    n
+    r
+    t
+    "
+    x HexDigit
+    x HexDigit HexDigit
+
+NonDigit:
+    a-z
+    A-Z
+    _
+
+IdentChar:
+    NonDigit
+    Digit
+
+IdentChars:
+    IdentChar IdentChars
+
+Identifier:
+    NonDigit IdentChars
