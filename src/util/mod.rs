@@ -1,5 +1,6 @@
 pub mod file;
 pub mod error;
+pub mod diag;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
