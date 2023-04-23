@@ -246,6 +246,7 @@ impl<'buf> Lexer<'buf> {
                 '>' if self.accept_char('=') => TokKind::RAngleEq,
                 '>' => TokKind::RAngleBracket,
                 '+' => TokKind::Plus,
+                '-' if self.accept_char('>') => TokKind::Arrow,
                 '-' => TokKind::Minus,
                 '/' => TokKind::Slash,
                 '%' => TokKind::Percent,
@@ -256,10 +257,10 @@ impl<'buf> Lexer<'buf> {
                 '^' => TokKind::Caret,
                 '!' if self.accept_char('=') => TokKind::ExclEq,
                 '!' => TokKind::ExclMark,
+                c if c.is_digit(10) => TokKind::IntLiteral(self.lex_int_constant(c)),
                 c if is_identifier_char(c) => self.lex_ident_or_kw(),
                 '_' => self.lex_ident_or_kw(),
                 '"' => TokKind::StrLiteral(self.lex_str_literal()),
-                c if c.is_digit(10) => TokKind::IntLiteral(self.lex_int_constant(c)),
                 c if c.is_whitespace() => {
                     self.skip_whitespace();
                     return self.lex(); // tail call
