@@ -1,10 +1,9 @@
-use std::iter::Peekable;
-use std::str::Chars;
-use crate::lex::{KwKind, LexerError, Token, TokKind};
+use crate::lex::{KwKind, TokKind, Token};
 use crate::util::diag::{Diag, DiagEngine, MsgKind};
-use crate::util::error::{LarkError, LarkResult};
 use crate::util::file::Span;
 use crate::util::InternedStr;
+use std::iter::Peekable;
+use std::str::Chars;
 
 /// Check if the supplied character is valid to be inside of an identifier. \[a-zA-Z0-9_\]
 fn is_identifier_char(c: char) -> bool {
@@ -13,7 +12,6 @@ fn is_identifier_char(c: char) -> bool {
         || ((c >= '0') && (c <= '9'))
         || (c == '_')
 }
-
 
 /// Lark language lexer. Lexes Tokens from an arbitrary Span backed by the thread-local SourceMap.
 /// Parses integer constants and string literals into internal representations.
@@ -228,9 +226,9 @@ impl<'buf> Lexer<'buf> {
     /// This method is only meant to be used by the [Iterator] implementation, direct use requires
     /// properly managing the lexer state between calls, since this method does not reset the state
     /// after returning.
-    fn lex(&mut self) -> Option<TokKind> {
+    fn lex(&mut self) -> TokKind {
         match self.next_char() {
-            Some(c) => Some(match c {
+            Some(c) => match c {
                 '[' => TokKind::LSqBracket,
                 ']' => TokKind::RSqBracket,
                 '*' => TokKind::Star,
@@ -270,12 +268,11 @@ impl<'buf> Lexer<'buf> {
                     self.diag_last(MsgKind::UnexpectedCharacter);
                     return self.lex(); // tail call
                 }
-            }),
-            None => None
+            },
+            None => TokKind::Eof,
         }
     }
 }
-
 
 impl<'buf> Diag for Lexer<'buf> {
     fn diag_engine(&self) -> &DiagEngine {
@@ -287,14 +284,16 @@ impl<'buf> Iterator for Lexer<'buf> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.lex()
-            .map(|kind| Token {
-                kind,
-                span: self.token_span(),
-            })
-            .and_then(|tok| {
+        match self.lex() {
+            TokKind::Eof => None,
+            kind => {
+                let tok = Token {
+                    kind,
+                    span: self.token_span(),
+                };
                 self.finish_token();
                 Some(tok)
-            })
+            }
+        }
     }
 }
