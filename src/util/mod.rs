@@ -1,11 +1,10 @@
-pub mod file;
-pub mod error;
 pub mod diag;
+pub mod file;
 
+use memmap::MmapMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use memmap::MmapMut;
 
 /// Represents a string interned in the thread local string interner.
 /// This is a convenience type for interfacing with the interner that allows interned strings
@@ -40,7 +39,6 @@ impl InternedStr {
         })
     }
 }
-
 
 impl Debug for InternedStr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

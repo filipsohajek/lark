@@ -77,10 +77,19 @@ PrimitiveType:
     char
     str
 
+
+
+PointerSuffix:
+    *
+
+ArraySuffix:
+    [ ]
+    [ ConstExpr ]
+
 Type:
-    BaseType [ ]
-    BaseType [ ConstantExpr ]
-    BaseType *
+    BaseType
+    BaseType PointerSuffix
+    BaseType PointerSuffix ArraySuffix*
 
 BaseType:
     PrimitiveType
@@ -95,7 +104,8 @@ FnHeader:
 
 FnDecl:
     FnHeader ;
-    FnHeader { StmtList }
+    FnHeader StmtBlock
+
 
 FnArgList:
     FnArg
@@ -114,11 +124,14 @@ VarDecl:
     let Ident : Type = Expr ;
 
 WhileStmt:
-    while Expr { StmtList }
+    while Expr StmtBlock
 
 IfStmt:
-    if Expr { StmtList }
-    if Expr { StmtList } else { StmtList }
+    if Expr StmtBlock
+    if Expr StmtBlock else StmtBlock
+
+StmtBlock:
+    { StmtList }
 
 StmtList:
     Stmt

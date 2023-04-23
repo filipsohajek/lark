@@ -1,16 +1,18 @@
+use crate::lex::lexer::Lexer;
+use crate::parse::Parser;
+use memmap::MmapMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
-use memmap::MmapMut;
-use crate::lex::lexer::Lexer;
 
 /// Represents a slice of a file in the thread local SourceMap. The type is intentionally small
 /// (2x usize), as it's used in many places throughout the code.
 ///
 /// A valid span lies entirely inside of exactly one mapped file. Methods on Spans may not
 /// necessarily preserve the validity of a Span (i.e. may make one Span span multiple files).
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Span {
     pub offset: usize,
     pub length: usize
@@ -33,6 +35,10 @@ impl Span {
 
     pub fn lexer(&self) -> Lexer<'static> {
         Lexer::new_from_span(self.clone())
+    }
+
+    pub fn parser(&self) -> Parser<'static> {
+        Parser::new(self.lexer())
     }
 
     /// Return a reference to the buffer the Span is referring to. Panics if the Span is invalid.
@@ -63,6 +69,31 @@ impl Span {
     pub fn truncate_head(self, trunc_len: usize) -> Span {
         let new_len = self.length - trunc_len;
         self.substr(trunc_len, new_len)
+    }
+
+    pub fn between(self, other: Span) -> Span {
+        let offset = self.offset.min(other.offset);
+        let length = (self.offset + self.length).max(other.offset + other.length) - offset;
+        Span { offset, length }
+    }
+}
+
+impl Default for Span {
+    fn default() -> Self {
+        Self {
+            offset: 0,
+            length: 0,
+        }
+    }
+}
+
+impl Debug for Span {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Span")
+            .field("offset", &self.offset)
+            .field("length", &self.offset)
+            .field("buffer", &self.buffer())
+            .finish()
     }
 }
 

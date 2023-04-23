@@ -3,21 +3,6 @@ pub mod lexer;
 use crate::util::file::Span;
 use crate::util::InternedStr;
 
-/// Error enumeration type for the lexer. Used to qualify the error in the LarkError::Lex variant.
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum LexerError {
-    /// The lexer encountered a character that couldn't be processed.
-    UnexpectedCharacter,
-
-    /// An integer constant in the source was too large to fit into an u64 type. The Lexer terminates
-    /// at the first digit that overflows, and may be in an inconsistent state (TODO)
-    IntegerConstantTooLarge,
-
-    /// An invalid escape sequence was encountered while parsing a string literal. The lexer may
-    /// be in an inconsistent state afterwards (TODO)
-    InvalidEscapeSequence
-}
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum KwKind {
     U8,
@@ -35,7 +20,7 @@ pub enum KwKind {
     If,
     Fn,
     Else,
-    Let
+    Let,
 }
 
 impl TryFrom<&str> for KwKind {
@@ -59,7 +44,7 @@ impl TryFrom<&str> for KwKind {
             "fn" => Self::Fn,
             "else" => Self::Else,
             "let" => Self::Let,
-            _ => return Err(())
+            _ => return Err(()),
         })
     }
 }
@@ -108,6 +93,6 @@ pub enum TokKind {
 /// type itself doesn't own any data and is Copy, so that it's easier to pass Tokens around the program.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Token {
-    kind: TokKind,
-    span: Span
+    pub kind: TokKind,
+    pub span: Span,
 }

@@ -1,15 +1,31 @@
-use std::slice::Iter;
 use crate::util::file::Span;
+use std::slice::Iter;
+use crate::lex::Token;
 
+#[derive(Debug)]
 pub enum MsgKind {
     IntegerConstantOverflow,
     InvalidEscapeSequence,
-    UnexpectedCharacter
+    UnexpectedCharacter,
+    ExpectedNameAfterFn,
+    ExpectedParenAfterFnName,
+    ExpectedFnReturnType,
+    ExpectedColonAfterFnArg,
+    ExpectedCommaAfterFnArg,
+    UnexpectedTokenInFnArgs,
+    ExpectedValueInExpression,
+    ExpectedNameAfterLet,
+    MissingSemicolon,
+    InvalidType,
+    UnclosedParen,
+    UnclosedBracket,
+    UnexpectedToken,
 }
 
-struct DiagMsg {
-    kind: MsgKind,
-    span: Span
+#[derive(Debug)]
+pub struct DiagMsg {
+    pub kind: MsgKind,
+    pub span: Span,
 }
 
 /// An engine for collecting diagnostic messages.
@@ -17,7 +33,7 @@ struct DiagMsg {
 /// Each implementor of the [Diag] trait shall hold exactly one instance of this struct and collect
 /// all its diagnostics errors there.
 pub struct DiagEngine {
-    messages: Vec<DiagMsg>
+    messages: Vec<DiagMsg>,
 }
 
 impl DiagEngine {
@@ -38,7 +54,6 @@ impl DiagEngine {
         self.messages.iter()
     }
 }
-
 
 /// Trait for objects using the diagnostics interface.
 ///
