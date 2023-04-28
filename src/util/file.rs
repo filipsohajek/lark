@@ -48,6 +48,14 @@ impl Span {
         })
     }
 
+    /// Return the backing buffer of the file this Span refers to and a relative offset of this
+    /// Span into that file.
+    pub fn file_offset(&self) -> (&'static str, usize) {
+        SOURCE_MAP.with(|sourcemap_ref| {
+            sourcemap_ref.borrow().file_offset(self.offset)
+        })
+    }
+
     /// Return a subspan starting at the specified offset of the parent Span and of a specified length.
     ///
     /// If the offset is greater than the span length, a Span of zero length is returned, starting
@@ -75,6 +83,19 @@ impl Span {
         let offset = self.offset.min(other.offset);
         let length = (self.offset + self.length).max(other.offset + other.length) - offset;
         Span { offset, length }
+    }
+
+    /// Return a tuple (line, offset, length), where line is the Span extended to the nearest
+    /// newlines (excluding) in both directions, offset is the Span offset into line and length is
+    /// the Span length.
+    pub fn line_span(&self) -> (&'static str, usize, usize) {
+        let (file, file_offset) = self.file_offset();
+        let l_offset = *&file[..file_offset].rfind('\n').unwrap_or(0);
+        let r_offset = *&file[(file_offset + self.length)..].find('\n').unwrap_or(file.len() - (file_offset + self.length) + 1);
+        let line = &file[(l_offset + 1)..(file_offset + r_offset + self.length)];
+        let offset = line.len() - r_offset;
+
+        (line, offset, self.length)
     }
 }
 
@@ -120,10 +141,7 @@ impl SourceMap {
         }
     }
 
-    /// Return the buffer starting at a given global offset of a specified length.
-    ///
-    /// The requested "slice" must lie entirely inside of exactly one mapped file.
-    fn buffer(&self, offset: usize, length: usize) -> &'static str {
+    fn file_offset(&self, glob_offset: usize) -> (&'static str, usize) {
         // Find the first file whose end lies after the offset
         let (matching_offset, matching_file) =
             self.files
@@ -133,20 +151,26 @@ impl SourceMap {
                     Some((*total_offset, file))
                 })
                 .find(|&(total_offset, _file)| {
-                    total_offset >= offset
+                    total_offset >= glob_offset
                 })
                 .unwrap();
 
+        let file_base_offset = matching_file.len() - (matching_offset - glob_offset);
+        let file_str = unsafe { std::mem::transmute::<&str, &str>(std::str::from_utf8_unchecked(matching_file.as_ref())) };
+
+        (file_str, file_base_offset)
+    }
+
+    /// Return the buffer starting at a given global offset of a specified length.
+    ///
+    /// The requested "slice" must lie entirely inside of exactly one mapped file.
+    fn buffer(&self, offset: usize, length: usize) -> &'static str {
+        let (file_str, file_offset) = self.file_offset(offset);
+
         // We do not support creating buffers spanning multiple files
-        assert!(length <= matching_file.len(), "attempted to create a buffer spanning multiple files");
+        assert!(length <= file_str.len(), "attempted to create a buffer spanning multiple files");
 
-        // Compute the intra-file offset from the global offset and slice the map appropriately
-        let file_base_offset = matching_file.len() - (matching_offset - offset);
-        let buffer_slice = &matching_file[file_base_offset..(file_base_offset + length)];
-
-        unsafe {
-            std::mem::transmute::<&str, &str>(std::str::from_utf8_unchecked(buffer_slice))
-        }
+        &file_str[file_offset..(file_offset + length)]
     }
 
     /// Try to map a file into the file map and return the resulting file ID (index into the file

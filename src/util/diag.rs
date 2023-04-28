@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use crate::util::file::Span;
 use std::slice::Iter;
 use crate::lex::Token;
@@ -22,10 +23,79 @@ pub enum MsgKind {
     UnexpectedToken,
 }
 
+enum Severity {
+    Info,
+    Warn,
+    Error
+}
+
+impl Severity {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Severity::Info => "INFO",
+            Severity::Warn => "WARN",
+            Severity::Error => "ERROR"
+        }
+    }
+}
+
+impl MsgKind {
+    fn severity(&self) -> Severity {
+        match self {
+            MsgKind::IntegerConstantOverflow => Severity::Error,
+            MsgKind::InvalidEscapeSequence => Severity::Error,
+            MsgKind::UnexpectedCharacter => Severity::Error,
+            MsgKind::ExpectedNameAfterFn => Severity::Error,
+            MsgKind::ExpectedParenAfterFnName => Severity::Error,
+            MsgKind::ExpectedFnReturnType => Severity::Error,
+            MsgKind::ExpectedColonAfterFnArg => Severity::Error,
+            MsgKind::ExpectedCommaAfterFnArg => Severity::Error,
+            MsgKind::UnexpectedTokenInFnArgs => Severity::Error,
+            MsgKind::ExpectedValueInExpression => Severity::Error,
+            MsgKind::ExpectedNameAfterLet => Severity::Error,
+            MsgKind::MissingSemicolon => Severity::Error,
+            MsgKind::InvalidType => Severity::Error,
+            MsgKind::UnclosedParen => Severity::Error,
+            MsgKind::UnclosedBracket => Severity::Error,
+            MsgKind::UnexpectedToken => Severity::Error,
+        }
+    }
+
+    fn message(&self) -> String {
+        match self {
+            MsgKind::IntegerConstantOverflow => format!("integer constant overflow"),
+            MsgKind::InvalidEscapeSequence => format!("invalid escape sequence"),
+            MsgKind::UnexpectedCharacter => format!("unexpected character"),
+            MsgKind::ExpectedNameAfterFn => format!("expected function name after \"fn\""),
+            MsgKind::ExpectedParenAfterFnName => format!("expected \"(\" after function name"),
+            MsgKind::ExpectedFnReturnType => format!("expected return type after \"->\""),
+            MsgKind::ExpectedColonAfterFnArg => format!("expected \":\" after function argument"),
+            MsgKind::ExpectedCommaAfterFnArg => format!("expected \",\" after function argument"),
+            MsgKind::UnexpectedTokenInFnArgs => format!("unexpected token in function arguments"),
+            MsgKind::ExpectedValueInExpression => format!("expected value"),
+            MsgKind::ExpectedNameAfterLet => format!("expected variable name after \"let\""),
+            MsgKind::MissingSemicolon => format!("missing semicolon"),
+            MsgKind::InvalidType => format!("invalid type specifier"),
+            MsgKind::UnclosedParen => format!("unclosed \"(\""),
+            MsgKind::UnclosedBracket => format!("unclosed \"[\""),
+            MsgKind::UnexpectedToken => format!("unexpected token")
+        }
+    }
+}
+
+
 #[derive(Debug, Clone, Copy)]
 pub struct DiagMsg {
     pub kind: MsgKind,
     pub span: Span,
+}
+
+impl Display for DiagMsg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "[{}]: {}", self.kind.severity().as_str(), self.kind.message());
+        writeln!(f, "{}", self.span.line_span().0);
+        Ok(())
+    }
 }
 
 /// An engine for collecting diagnostic messages.
