@@ -20,7 +20,7 @@ pub enum KwKind {
     If,
     Fn,
     Else,
-    Let,
+    Let
 }
 
 impl TryFrom<&str> for KwKind {
@@ -44,12 +44,13 @@ impl TryFrom<&str> for KwKind {
             "fn" => Self::Fn,
             "else" => Self::Else,
             "let" => Self::Let,
-            _ => return Err(()),
+            _ => return Err(())
         })
     }
 }
 
-/// Determines the type of a Token. This type should not own any heap data to keep it Copy.
+/// Determines the type of a Token. This type should not own any heap data to
+/// keep it Copy.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TokKind {
     Identifier(InternedStr),
@@ -84,15 +85,16 @@ pub enum TokKind {
     Percent,                 // "%"
     ExclMark,                // "!"
     Arrow,                   // "->"
-    Eof,
+    Eof
 }
 
 /// Represents a single token in the input source.
 ///
-/// The information in this struct should be enough to reconstruct the source form of the token. The
-/// type itself doesn't own any data and is Copy, so that it's easier to pass Tokens around the program.
+/// The information in this struct should be enough to reconstruct the source
+/// form of the token. The type itself doesn't own any data and is Copy, so that
+/// it's easier to pass Tokens around the program.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Token {
     pub kind: TokKind,
-    pub span: Span,
+    pub span: Span
 }

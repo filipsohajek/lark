@@ -18,7 +18,7 @@ pub enum BinaryOp {
     Sub,
     Mult,
     Div,
-    Mod,
+    Mod
 }
 
 #[derive(Debug)]
@@ -27,7 +27,7 @@ pub enum UnaryOp {
     Plus,
     Ref,
     Deref,
-    Negate,
+    Negate
 }
 
 #[derive(Debug)]
@@ -35,39 +35,33 @@ pub enum ExprKind {
     Binary {
         op: BinaryOp,
         lhs: Box<Expr>,
-        rhs: Box<Expr>,
+        rhs: Box<Expr>
     },
     Unary {
         op: UnaryOp,
-        rhs: Box<Expr>,
+        rhs: Box<Expr>
     },
     FnCall {
         callee: Box<Expr>,
-        args: Vec<Box<Expr>>,
+        args: Vec<Box<Expr>>
     },
     Subscript {
         val: Box<Expr>,
-        expr: Box<Expr>,
+        expr: Box<Expr>
     },
     Assign {
         lval: Box<Expr>,
-        rval: Box<Expr>,
+        rval: Box<Expr>
     },
     IntLiteral(u64),
     StrLiteral(InternedStr),
-    Var(InternedStr),
+    Var(InternedStr)
 }
 
 #[derive(Debug)]
 pub struct Expr {
     pub(crate) kind: ExprKind,
-    pub(crate) span: Span,
-}
-
-impl Expr {
-    pub fn new(kind: ExprKind, span: Span) -> Self {
-        Self { kind, span }
-    }
+    pub(crate) span: Span
 }
 
 #[derive(Debug)]
@@ -81,12 +75,12 @@ pub enum PrimitiveType {
     Signed32,
     Signed64,
     Char,
-    Str,
+    Str
 }
 
 #[derive(Debug)]
 pub enum BaseType {
-    Primitive(PrimitiveType),
+    Primitive(PrimitiveType)
 }
 
 #[derive(Debug)]
@@ -100,39 +94,39 @@ pub enum Type {
 #[derive(Debug)]
 pub struct FnArg {
     pub(crate) name: InternedStr,
-    pub(crate) arg_type: Box<Type>,
+    pub(crate) arg_type: Box<Type>
 }
 
 #[derive(Debug)]
 pub enum Stmt {
     Return {
-        retval: Option<Box<Expr>>,
+        retval: Option<Box<Expr>>
     },
     If {
         condition: Expr,
         body: Box<StmtBlock>,
-        else_body: Option<Box<StmtBlock>>,
+        else_body: Option<Box<StmtBlock>>
     },
     While {
         condition: Box<Expr>,
-        body: Box<StmtBlock>,
+        body: Box<StmtBlock>
     },
     VarDecl {
         name: InternedStr,
         type_hint: Option<Box<Type>>,
-        value: Option<Box<Expr>>,
+        value: Option<Box<Expr>>
     },
     FnDecl {
         name: InternedStr,
         return_type: Box<Type>,
         args: Vec<FnArg>,
-        body: Option<StmtBlock>,
+        body: Option<StmtBlock>
     },
-    Expr(Box<Expr>),
+    Expr(Box<Expr>)
 }
 
 #[derive(Debug)]
 pub struct StmtBlock {
     pub stmts: Vec<Stmt>,
-    pub span: Span,
+    pub span: Span
 }

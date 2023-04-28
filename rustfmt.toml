@@ -1,0 +1,10 @@
+wrap_comments = true
+format_strings = true
+match_arm_leading_pipes = "Preserve"
+trailing_comma = "Never"
+imports_granularity = "Module"
+overflow_delimited_expr = true
+group_imports = "StdExternalCrate"
+struct_lit_width = 50
+use_field_init_shorthand = true
+match_block_trailing_comma = true

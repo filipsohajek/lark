@@ -1,11 +1,13 @@
+use std::iter::Peekable;
+use std::str::Chars;
+
 use crate::lex::{KwKind, TokKind, Token};
 use crate::util::diag::{Diag, DiagEngine, MsgKind};
 use crate::util::file::Span;
 use crate::util::InternedStr;
-use std::iter::Peekable;
-use std::str::Chars;
 
-/// Check if the supplied character is valid to be inside of an identifier. \[a-zA-Z0-9_\]
+/// Check if the supplied character is valid to be inside of an identifier.
+/// \[a-zA-Z0-9_\]
 fn is_identifier_char(c: char) -> bool {
     ((c >= 'a') && (c <= 'z'))
         || ((c >= 'A') && (c <= 'Z'))
@@ -13,32 +15,35 @@ fn is_identifier_char(c: char) -> bool {
         || (c == '_')
 }
 
-/// Lark language lexer. Lexes Tokens from an arbitrary Span backed by the thread-local SourceMap.
-/// Parses integer constants and string literals into internal representations.
+/// Lark language lexer. Lexes Tokens from an arbitrary Span backed by the
+/// thread-local SourceMap. Parses integer constants and string literals into
+/// internal representations.
 ///
-/// The lexer works in the forward direction only and at all times holds an iterator over the not
-/// yet scanned characters and a Span covering all these characters. When lexing a Token, the Lexer
-/// keeps track of the number of consumed bytes and after a token is finished, truncates this Span,
+/// The lexer works in the forward direction only and at all times holds an
+/// iterator over the not yet scanned characters and a Span covering all these
+/// characters. When lexing a Token, the Lexer keeps track of the number of
+/// consumed bytes and after a token is finished, truncates this Span,
 /// thus ensuring a consistent internal state after each token.
 ///
-/// The lexer does not try to recover, therefore any lexing error, unless explicitly stated in its
-/// documentation, is considered to be fatal and all subsequent output should be considered incorrect.
+/// The lexer does not try to recover, therefore any lexing error, unless
+/// explicitly stated in its documentation, is considered to be fatal and all
+/// subsequent output should be considered incorrect.
 pub struct Lexer<'buf> {
     buffer: Peekable<Chars<'buf>>,
     unscanned_span: Span,
     tok_length: usize,
-    diag_engine: DiagEngine,
+    diag_engine: DiagEngine
 }
 
 impl<'buf> Lexer<'buf> {
-    /// Create a new Lexer instance lexing a specified [Span]. The Span must be a valid one, backed
-    /// by the thread-local [SourceMap].
+    /// Create a new Lexer instance lexing a specified [Span]. The Span must be
+    /// a valid one, backed by the thread-local [SourceMap].
     pub fn new_from_span(base_span: Span) -> Self {
         Self {
             buffer: base_span.buffer().chars().peekable(),
             unscanned_span: base_span,
             tok_length: 0,
-            diag_engine: DiagEngine::new(),
+            diag_engine: DiagEngine::new()
         }
     }
 
@@ -57,15 +62,15 @@ impl<'buf> Lexer<'buf> {
         next_c
     }
 
-    /// Take the next input character if and only if it matches the specified one. Returns true
-    /// if the character matched, false otherwise.
+    /// Take the next input character if and only if it matches the specified
+    /// one. Returns true if the character matched, false otherwise.
     fn accept_char(&mut self, accepted_c: char) -> bool {
         // Use the peek_char/next_char methods to ensure token length consistency
         match self.peek_char() {
             Some(c) if c == accepted_c => {
                 self.next_char();
                 true
-            }
+            },
             _ => false
         }
     }
@@ -86,13 +91,14 @@ impl<'buf> Lexer<'buf> {
         self.diag_engine.diag(msg_kind, span);
     }
 
-    /// Lex an input character sequence into either an identifier or a keyword. Returns either
-    /// [TokKind::Identifier] or [TokKind::Keyword].
+    /// Lex an input character sequence into either an identifier or a keyword.
+    /// Returns either [TokKind::Identifier] or [TokKind::Keyword].
     ///
-    /// This method is called from the base [Lexer::lex] method after a identifier/keyword start character
-    /// has been encountered. It accepts all identifier characters (cf. [is_identifier_char]). The
-    /// resulting buffer is then matched against known keywords; if this fails, the buffer is interned
-    /// and an identifier token kind is returned.
+    /// This method is called from the base [Lexer::lex] method after a
+    /// identifier/keyword start character has been encountered. It accepts
+    /// all identifier characters (cf. [is_identifier_char]). The
+    /// resulting buffer is then matched against known keywords; if this fails,
+    /// the buffer is interned and an identifier token kind is returned.
     fn lex_ident_or_kw(&mut self) -> TokKind {
         while let Some(c) = self.peek_char() {
             if !is_identifier_char(c) {
@@ -102,20 +108,23 @@ impl<'buf> Lexer<'buf> {
         }
 
         let ident_buf = self.token_span().buffer();
-        KwKind::try_from(ident_buf)
-            .map_or(TokKind::Identifier(InternedStr::new_from_str(ident_buf)),
-                    |kw_kind| TokKind::Keyword(kw_kind))
+        KwKind::try_from(ident_buf).map_or(
+            TokKind::Identifier(InternedStr::new_from_str(ident_buf)),
+            |kw_kind| TokKind::Keyword(kw_kind)
+        )
     }
 
     /// Lex an integer constant. Returns the lexed value on success.
     ///
-    /// The method starts after the first character of the constant has been lexed by the [Lexer::lex]
-    /// method and takes this first character as an argument to determine the proper radix to use or
-    /// to use it as an initial value.
+    /// The method starts after the first character of the constant has been
+    /// lexed by the [Lexer::lex] method and takes this first character as
+    /// an argument to determine the proper radix to use or to use it as an
+    /// initial value.
     ///
-    /// Integer constants are internally represented by the u64 type. If an overflow occurs, this
-    /// method returns an error. It does not attempt to recover by advancing beyond the constant
-    /// and the lexer may be in an inconsistent state afterwards (TODO).
+    /// Integer constants are internally represented by the u64 type. If an
+    /// overflow occurs, this method returns an error. It does not attempt
+    /// to recover by advancing beyond the constant and the lexer may be in
+    /// an inconsistent state afterwards (TODO).
     fn lex_int_constant(&mut self, first_digit: char) -> u64 {
         // The first digit may indicate the radix (0x), or it may be a value
         let (radix, mut val) = match first_digit {
@@ -132,20 +141,24 @@ impl<'buf> Lexer<'buf> {
             let c_digit = c.to_digit(radix as u32).unwrap() as u64;
 
             // Checked-append the digit to the value, bailing out upon overflow
-            val = val.checked_mul(radix)
+            val = val
+                .checked_mul(radix)
                 .and_then(|mult_val| mult_val.checked_add(c_digit))
-                .map_or_else(|| {
-                    self.diag_last(MsgKind::IntegerConstantOverflow);
-                    val
-                }, |val| val);
+                .map_or_else(
+                    || {
+                        self.diag_last(MsgKind::IntegerConstantOverflow);
+                        val
+                    },
+                    |val| val
+                );
         }
 
         val
     }
 
-    /// Lex an escape sequence. Called by [Lexer::lex_str_literal] after encountering a backslash
-    /// ("\\") character. On success, it returns a single character corresponding to the lexed
-    /// escape sequence.
+    /// Lex an escape sequence. Called by [Lexer::lex_str_literal] after
+    /// encountering a backslash ("\\") character. On success, it returns a
+    /// single character corresponding to the lexed escape sequence.
     fn lex_escape_sequence(&mut self) -> Option<char> {
         Some(match self.next_char() {
             Some('n') => '\n',
@@ -153,7 +166,8 @@ impl<'buf> Lexer<'buf> {
             Some('r') => '\r',
             Some('"') => '"',
             Some('x') => {
-                // A hexadecimal escape sequence has at most two digits, so we parse them explicitly.
+                // A hexadecimal escape sequence has at most two digits, so we parse them
+                // explicitly.
                 let digit_1 = match self.next_char() {
                     Some(c) => c.to_digit(16).unwrap(),
                     None => {
@@ -161,9 +175,7 @@ impl<'buf> Lexer<'buf> {
                         return None;
                     }
                 };
-                let digit_2 =
-                    self.next_char()
-                        .and_then(|c| c.to_digit(16));
+                let digit_2 = self.next_char().and_then(|c| c.to_digit(16));
 
                 let char_code = match digit_2 {
                     Some(d) => digit_1 * 16 + d,
@@ -177,7 +189,7 @@ impl<'buf> Lexer<'buf> {
                         return None;
                     }
                 }
-            }
+            },
             _ => {
                 self.diag_last(MsgKind::InvalidEscapeSequence);
                 return None;
@@ -185,9 +197,11 @@ impl<'buf> Lexer<'buf> {
         })
     }
 
-    /// Lex a string literal. Called by [Lexer::lex] after a " character has been encountered.
-    /// Accepts all characters until the matching ". Escape sequences in the string are parsed
-    /// (by [Lexer::lex_escape_sequence]), the resulting string is interned, and returned.
+    /// Lex a string literal. Called by [Lexer::lex] after a " character has
+    /// been encountered. Accepts all characters until the matching ".
+    /// Escape sequences in the string are parsed
+    /// (by [Lexer::lex_escape_sequence]), the resulting string is interned, and
+    /// returned.
     fn lex_str_literal(&mut self) -> InternedStr {
         let mut lexed_string = String::new();
         while let Some(c) = self.peek_char() {
@@ -209,8 +223,8 @@ impl<'buf> Lexer<'buf> {
         InternedStr::new_from_str(lexed_string.as_str())
     }
 
-    /// Skip all whitespace in the input character stream and reset the lexer state so that this
-    /// whitespace is ignored.
+    /// Skip all whitespace in the input character stream and reset the lexer
+    /// state so that this whitespace is ignored.
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek_char() {
             if !c.is_whitespace() {
@@ -223,9 +237,9 @@ impl<'buf> Lexer<'buf> {
 
     /// Lex a single token from the input character stream.
     ///
-    /// This method is only meant to be used by the [Iterator] implementation, direct use requires
-    /// properly managing the lexer state between calls, since this method does not reset the state
-    /// after returning.
+    /// This method is only meant to be used by the [Iterator] implementation,
+    /// direct use requires properly managing the lexer state between calls,
+    /// since this method does not reset the state after returning.
     fn lex(&mut self) -> TokKind {
         match self.next_char() {
             Some(c) => match c {
@@ -264,13 +278,13 @@ impl<'buf> Lexer<'buf> {
                 c if c.is_whitespace() => {
                     self.skip_whitespace();
                     return self.lex(); // tail call
-                }
+                },
                 _ => {
                     self.diag_last(MsgKind::UnexpectedCharacter);
                     return self.lex(); // tail call
                 }
             },
-            None => TokKind::Eof,
+            None => TokKind::Eof
         }
     }
 }
@@ -288,10 +302,7 @@ impl<'buf> Iterator for Lexer<'buf> {
         match self.lex() {
             TokKind::Eof => None,
             kind => {
-                let tok = Token {
-                    kind,
-                    span: self.token_span(),
-                };
+                let tok = Token { kind, span: self.token_span() };
                 self.finish_token();
                 Some(tok)
             }

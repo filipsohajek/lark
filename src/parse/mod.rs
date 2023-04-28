@@ -1,39 +1,41 @@
 pub mod ast;
 
+use std::fmt::Debug;
+use std::iter;
+
 use crate::lex::lexer::Lexer;
 use crate::lex::{KwKind, TokKind, Token};
 use crate::parse::ast::{
-    BaseType, BinaryOp, Expr, ExprKind, FnArg, PrimitiveType, Stmt, StmtBlock, Type,
+    BaseType, BinaryOp, Expr, ExprKind, FnArg, PrimitiveType, Stmt, StmtBlock, Type
 };
 use crate::util::diag::{DiagEngine, MsgKind};
 use crate::util::file::Span;
 use crate::util::InternedStr;
-use std::fmt::Debug;
-use std::iter;
 
 /// Iterator adapter allowing arbitrary fixed-size lookahead
 ///
-/// The adapter keeps the current lookahead in a ring buffer, which is populated every time it
-/// advances. Therefore there is no guarantee on the [Iterator::next] calls to the underlying
-/// iterator. The ring buffer is populated upon creation, which allows the [PeekN::peek] and
-/// [PeekN::peek_n] methods to be pure.
+/// The adapter keeps the current lookahead in a ring buffer, which is populated
+/// every time it advances. Therefore there is no guarantee on the
+/// [Iterator::next] calls to the underlying iterator. The ring buffer is
+/// populated upon creation, which allows the [PeekN::peek] and [PeekN::peek_n]
+/// methods to be pure.
 #[derive(Clone, Debug)]
 struct PeekN<I: Iterator, const N: usize>
 where
-    I::Item: Sized + Copy + Debug,
+    I::Item: Sized + Copy + Debug
 {
     buffer: [Option<I::Item>; N],
     cur_index: usize,
-    parent: I,
+    parent: I
 }
 
 impl<I, const N: usize> PeekN<I, N>
 where
     I::Item: Sized + Copy + Debug,
-    I: Iterator,
+    I: Iterator
 {
-    /// Take exactly N items from the provided iterator as [Option], padding the result with
-    /// [Option::None] if the iterator has finished before.
+    /// Take exactly N items from the provided iterator as [Option], padding the
+    /// result with [Option::None] if the iterator has finished before.
     fn take_n_exact(iter: &mut I) -> [Option<I::Item>; N] {
         iter.by_ref()
             .map(|x| Some(x))
@@ -48,7 +50,7 @@ where
         Self {
             buffer: Self::take_n_exact(&mut parent),
             cur_index: 0,
-            parent,
+            parent
         }
     }
 
@@ -71,7 +73,7 @@ where
 impl<I, const N: usize> Iterator for PeekN<I, N>
 where
     I::Item: Sized + Copy + Debug,
-    I: Iterator,
+    I: Iterator
 {
     type Item = I::Item;
 
@@ -88,10 +90,11 @@ where
     }
 }
 
-/// Wrapper for peeking and advancing lexer state in the parser. Peeks at the next token and matches
-/// it against the provided patterns, advancing the lexer if the patterns match.
+/// Wrapper for peeking and advancing lexer state in the parser. Peeks at the
+/// next token and matches it against the provided patterns, advancing the lexer
+/// if the patterns match.
 macro_rules! accept_token {
-    ($parser:expr, $( $kind:pat => $accept_block:block,)+ $else_block: block) => (
+    ($parser:expr, $( $kind:pat => $accept_block:expr,)+ $else_block: block) => (
         match $parser.peek_token() {
             $(&Some(Token {kind: $kind, ..}) => {
                 $parser.next_token();
@@ -116,13 +119,14 @@ macro_rules! accept_token {
     )
 }
 
-/// Lark parser. Uses a recursive descent parser to create an AST structure from the tokens of the
-/// provided [Lexer]. The parser attempts to error-recover as much as possible and will always
-/// produce a valid AST. Any errors during the parsing are captured using the [Diag] interface.
+/// Lark parser. Uses a recursive descent parser to create an AST structure from
+/// the tokens of the provided [Lexer]. The parser attempts to error-recover as
+/// much as possible and will always produce a valid AST. Any errors during the
+/// parsing are captured using the [Diag] interface.
 pub struct Parser<'lex> {
     lexer: PeekN<Lexer<'lex>, 1>,
     diag_engine: DiagEngine,
-    last_span: Span,
+    last_span: Span
 }
 
 impl<'lex> Parser<'lex> {
@@ -130,7 +134,7 @@ impl<'lex> Parser<'lex> {
         Self {
             lexer: PeekN::new(lexer),
             diag_engine: DiagEngine::new(),
-            last_span: Span::default(),
+            last_span: Span::default()
         }
     }
 
@@ -156,8 +160,8 @@ impl<'lex> Parser<'lex> {
             .diag(kind, tok_opt.map(|t| t.span).unwrap_or(self.last_span))
     }
 
-    /// Parse a function definition argument list (FnArgList). Does not attempt to recover missing
-    /// commas nor type specifiers.
+    /// Parse a function definition argument list (FnArgList). Does not attempt
+    /// to recover missing commas nor type specifiers.
     ///
     /// FnHeader:
     ///     fn Ident ( FnArgList ) -> Type
@@ -178,7 +182,7 @@ impl<'lex> Parser<'lex> {
 
         'args: loop {
             let arg_name = accept_token!(self,
-            TokKind::Identifier(arg_name) => {arg_name}, {
+            TokKind::Identifier(arg_name) => arg_name, {
                 self.diag_last(MsgKind::UnexpectedTokenInFnArgs);
                 return None;
             });
@@ -193,21 +197,19 @@ impl<'lex> Parser<'lex> {
 
             accept_token!(self,
                 TokKind::Comma => {},  // argument separator ","
-                TokKind::RParen => { break 'args },  // argument list end ")"
+                TokKind::RParen => break 'args,  // argument list end ")"
                 {
                     self.diag_last(MsgKind::ExpectedCommaAfterFnArg);
                     return None;
                 }
             );
-            args.push(FnArg {
-                name: arg_name,
-                arg_type,
-            });
+            args.push(FnArg { name: arg_name, arg_type });
         }
         Some(args)
     }
 
-    /// Parse a function call arguments (ArgList). Does not attempt to recover any errors.
+    /// Parse a function call arguments (ArgList). Does not attempt to recover
+    /// any errors.
     ///
     /// ArgList:
     ///     AssignExpr
@@ -224,7 +226,7 @@ impl<'lex> Parser<'lex> {
 
             accept_token!(self,
                 TokKind::Comma => {},  // argument separator ","
-                TokKind::RParen => {break 'args},  // argument list end ")"
+                TokKind::RParen => break 'args,  // argument list end ")"
                 {
                     self.diag_last(MsgKind::ExpectedCommaAfterFnArg);
                     return None;
@@ -274,8 +276,9 @@ impl<'lex> Parser<'lex> {
         }
     }
 
-    /// Parse an expression value with an optional postfix part (PostfixExpr). Attempts to recover
-    /// from unclosed parentheses by assuming a closing after the inner expression.
+    /// Parse an expression value with an optional postfix part (PostfixExpr).
+    /// Attempts to recover from unclosed parentheses by assuming a closing
+    /// after the inner expression.
     ///
     /// PostfixExpr:
     ///     BaseExpr
@@ -288,18 +291,15 @@ impl<'lex> Parser<'lex> {
     ///     IntegerLiteral
     ///     StringLiteral
     fn parse_postfix_expr(&mut self) -> Option<Box<Expr>> {
-        let mut val = Box::new(match self.next_token() {
-            Some(Token { kind: TokKind::IntLiteral(val), span}) => Expr {
-                kind: ExprKind::IntLiteral(val),
-                span,
+        let val = Box::new(match self.next_token() {
+            Some(Token { kind: TokKind::IntLiteral(val), span }) => {
+                Expr { kind: ExprKind::IntLiteral(val), span }
             },
-            Some(Token {kind: TokKind::StrLiteral(val), span}) => Expr {
-                kind: ExprKind::StrLiteral(val),
-                span,
+            Some(Token { kind: TokKind::StrLiteral(val), span }) => {
+                Expr { kind: ExprKind::StrLiteral(val), span }
             },
-            Some(Token { kind: TokKind::Identifier(val), span}) => Expr {
-                kind: ExprKind::Var(val),
-                span,
+            Some(Token { kind: TokKind::Identifier(val), span }) => {
+                Expr { kind: ExprKind::Var(val), span }
             },
             Some(Token { kind: TokKind::LParen, .. }) => {
                 // parenthesized expression
@@ -312,7 +312,7 @@ impl<'lex> Parser<'lex> {
                 });
 
                 return Some(parsed_expr);
-            }
+            },
             tok => {
                 self.diag_tok_or_last(MsgKind::ExpectedValueInExpression, tok);
                 return None;
@@ -392,18 +392,19 @@ impl<'lex> Parser<'lex> {
     ///     Identifier
     ///     IntegerLiteral
     ///     StringLiteral
-    ///
     fn parse_expr(&mut self) -> Option<Box<Expr>> {
         self.parse_postfix_expr()
             .and_then(|lhs| self.parse_expr_int(lhs, 0))
     }
 
-    /// Get the precedence of a binary operation corresponding to the given token.
+    /// Get the precedence of a binary operation corresponding to the given
+    /// token.
     ///
-    /// The method takes a reference to the operation token in an expression (i.e. "+", "-", ...) and
-    /// returns an optional precedence if the token corresponds to a binary operation. Higher values
-    /// indicate greater precedence. If the given token doesn't correspond to a binary op, None is
-    /// returned.
+    /// The method takes a reference to the operation token in an expression
+    /// (i.e. "+", "-", ...) and returns an optional precedence if the token
+    /// corresponds to a binary operation. Higher values indicate greater
+    /// precedence. If the given token doesn't correspond to a binary op, None
+    /// is returned.
     ///
     /// The precedence table is as follows (from least to most precedent):
     /// - Assignment ("="),
@@ -419,7 +420,7 @@ impl<'lex> Parser<'lex> {
     fn token_binop_pred(&mut self, token_opt: &Option<Token>) -> Option<u8> {
         let token = match token_opt {
             Some(tok) => tok,
-            None => return None,
+            None => return None
         };
         Some(match token.kind {
             TokKind::EqSign => 1,
@@ -429,23 +430,27 @@ impl<'lex> Parser<'lex> {
             TokKind::Caret => 5,
             TokKind::And => 6,
             TokKind::DoubleEq | TokKind::ExclEq => 7,
-            TokKind::LAngleBracket | TokKind::LAngleEq | TokKind::RAngleBracket | TokKind::RAngleEq => 8,
+            TokKind::LAngleBracket
+            | TokKind::LAngleEq
+            | TokKind::RAngleBracket
+            | TokKind::RAngleEq => 8,
             TokKind::Plus | TokKind::Minus => 9,
             TokKind::Star | TokKind::Slash | TokKind::Percent => 10,
-            _ => return None,
+            _ => return None
         })
     }
 
     /// Apply a binary operation to two operands.
     ///
-    /// Takes in a token kind corresponding to a binary operation, and a LHS/RHS pair. Returns the
-    /// expression resulting from applying the corresponding binary operation to the LHS/RHS.
-    /// Panics if the supplied token kind does not match any binary operation.
+    /// Takes in a token kind corresponding to a binary operation, and a LHS/RHS
+    /// pair. Returns the expression resulting from applying the
+    /// corresponding binary operation to the LHS/RHS. Panics if the
+    /// supplied token kind does not match any binary operation.
     fn token_binop_apply(
         &mut self,
         token_kind: TokKind,
         lhs: Box<Expr>,
-        rhs: Box<Expr>,
+        rhs: Box<Expr>
     ) -> Box<Expr> {
         let span = lhs.span.between(rhs.span);
 
@@ -467,7 +472,7 @@ impl<'lex> Parser<'lex> {
             TokKind::Star => ExprKind::Binary { op: BinaryOp::Mult, lhs, rhs },
             TokKind::Slash => ExprKind::Binary { op: BinaryOp::Div, lhs, rhs },
             TokKind::Percent => ExprKind::Binary { op: BinaryOp::Mod, lhs, rhs },
-            _ => unreachable!(),
+            _ => unreachable!()
         };
 
         Box::new(Expr { kind, span })
@@ -475,9 +480,10 @@ impl<'lex> Parser<'lex> {
 
     /// Parse an expression using a recursive operator-precedence algorithm.
     ///
-    /// The method parses operations until it encounters one with precedence lower than supplied.
-    /// On each operation, it parses the LHS (using the [parse_postfix_expr] method) and then folds
-    /// operations on RHS while they are of higher precedence.
+    /// The method parses operations until it encounters one with precedence
+    /// lower than supplied. On each operation, it parses the LHS (using the
+    /// [parse_postfix_expr] method) and then folds operations on RHS while
+    /// they are of higher precedence.
     fn parse_expr_int(&mut self, mut lhs: Box<Expr>, min_pred: u8) -> Option<Box<Expr>> {
         let mut lookahead = *self.peek_token();
         while let Some(op_pred) = self.token_binop_pred(&lookahead) {
@@ -501,7 +507,7 @@ impl<'lex> Parser<'lex> {
                 }
                 rhs = match self.parse_expr_int(rhs, op_pred + 1) {
                     Some(new_rhs) => new_rhs,
-                    None => return None,
+                    None => return None
                 };
                 lookahead = *self.peek_token();
             }
@@ -512,8 +518,9 @@ impl<'lex> Parser<'lex> {
         Some(lhs)
     }
 
-    /// Parse a type specifier (Type), consisting of a base type and optional suffices (pointer,
-    /// array). Tries to recover from unclosed array bracket (assumes closing after expression).
+    /// Parse a type specifier (Type), consisting of a base type and optional
+    /// suffices (pointer, array). Tries to recover from unclosed array
+    /// bracket (assumes closing after expression).
     ///
     /// Type:
     ///     BaseType
@@ -561,18 +568,18 @@ impl<'lex> Parser<'lex> {
 
         cur_type = accept_token!(
             self,
-            TokKind::Star => { Type::Pointer(Box::new(cur_type)) },
+            TokKind::Star => Type::Pointer(Box::new(cur_type)),
             { cur_type }
         );
 
         // parse array suffices (there may be multiple)
         loop {
             accept_token!(self, TokKind::LSqBracket => {}, {break});
-            let expr = accept_token!(self, TokKind::RSqBracket => {None}, {
+            let expr = accept_token!(self, TokKind::RSqBracket => None, {
                 let Some(parsed_expr) = self.parse_expr() else {
                     return None;
                 };
-                accept_token!(self, TokKind::RSqBracket => {Some(parsed_expr)}, {None})
+                accept_token!(self, TokKind::RSqBracket => Some(parsed_expr), {None})
             });
             cur_type = Type::Array(Box::new(cur_type), expr)
         }
@@ -580,8 +587,8 @@ impl<'lex> Parser<'lex> {
         Some(Box::new(cur_type))
     }
 
-    /// Parse a function definition header (FnHeader). Attempts to recover from an invalid argument
-    /// list by assuming no arguments.
+    /// Parse a function definition header (FnHeader). Attempts to recover from
+    /// an invalid argument list by assuming no arguments.
     ///
     /// FnHeader:
     ///     fn Ident ( FnArgList ) -> Type
@@ -593,7 +600,7 @@ impl<'lex> Parser<'lex> {
     /// FnArg:
     ///     Ident : Type
     fn parse_fn_hdr(&mut self) -> Option<(InternedStr, Box<Type>, Vec<FnArg>)> {
-        let fn_name = accept_token!(self, TokKind::Identifier(fn_name) => {fn_name}, {
+        let fn_name = accept_token!(self, TokKind::Identifier(fn_name) => fn_name, {
             self.diag_last(MsgKind::ExpectedNameAfterFn);
             return None;
         });
@@ -618,8 +625,9 @@ impl<'lex> Parser<'lex> {
         return Some((fn_name, ret_type, arg_list));
     }
 
-    /// Parse a function declaration (FnDecl). Tries to recover from a missing semicolon in externed
-    /// function declarations by assuming one at the end of the header.
+    /// Parse a function declaration (FnDecl). Tries to recover from a missing
+    /// semicolon in externed function declarations by assuming one at the
+    /// end of the header.
     ///
     /// FnDecl:
     ///     FnHeader ;
@@ -648,16 +656,11 @@ impl<'lex> Parser<'lex> {
             });
         }
 
-        return Some(Stmt::FnDecl {
-            name,
-            return_type,
-            args,
-            body,
-        });
+        return Some(Stmt::FnDecl { name, return_type, args, body });
     }
 
-    /// Parse a statement block (StmtBlock). Attempts to recover from invalid statements by
-    /// ignoring them.
+    /// Parse a statement block (StmtBlock). Attempts to recover from invalid
+    /// statements by ignoring them.
     ///
     /// StmtBlock:
     ///     { StmtList }
@@ -667,14 +670,11 @@ impl<'lex> Parser<'lex> {
     ///     Stmt StmtList
     fn parse_block(&mut self) -> Option<StmtBlock> {
         let start_span = match self.peek_token() {
-            &Some(Token {
-                kind: TokKind::LCurlyBracket,
-                span,
-            }) => {
+            &Some(Token { kind: TokKind::LCurlyBracket, span }) => {
                 self.next_token();
                 span
-            }
-            _ => return None,
+            },
+            _ => return None
         };
 
         let mut stmts = Vec::new();
@@ -691,21 +691,18 @@ impl<'lex> Parser<'lex> {
             };
         }
 
-        Some(StmtBlock {
-            stmts,
-            span: start_span.between(end_span),
-        })
+        Some(StmtBlock { stmts, span: start_span.between(end_span) })
     }
 
-    /// Parse a variable declaration (VarDecl). Attempts to recover from a missing semicolon by
-    /// assuming one after the declaration.
+    /// Parse a variable declaration (VarDecl). Attempts to recover from a
+    /// missing semicolon by assuming one after the declaration.
     ///
     /// VarDecl:
     ///     let Ident : Type ;
     ///     let Ident = Expr ;
     ///     let Ident : Type = Expr ;
     fn parse_var_decl(&mut self) -> Option<Stmt> {
-        let name = accept_token!(self, TokKind::Identifier(var_name) => {var_name}, {
+        let name = accept_token!(self, TokKind::Identifier(var_name) => var_name, {
             self.diag_last(MsgKind::ExpectedNameAfterLet);
             return None;
         });
@@ -734,19 +731,16 @@ impl<'lex> Parser<'lex> {
             self.diag_last(MsgKind::MissingSemicolon)
         });
 
-        Some(Stmt::VarDecl {
-            name,
-            type_hint,
-            value,
-        })
+        Some(Stmt::VarDecl { name, type_hint, value })
     }
 
     /// Resynchronize to the nearest statement in the current block.
     ///
-    /// Skips tokens up until a semicolon or a valid statement start is encountered. Keeps track
-    /// of the current block scope and ignores resynchronization tokens inside nested blocks. If
-    /// the end of the current block scope is encountered during resynchronization, the function
-    /// returns before this end.
+    /// Skips tokens up until a semicolon or a valid statement start is
+    /// encountered. Keeps track of the current block scope and ignores
+    /// resynchronization tokens inside nested blocks. If the end of the
+    /// current block scope is encountered during resynchronization, the
+    /// function returns before this end.
     fn resync_stmt(&mut self) {
         let mut block_scope = 0;
         while let Some(Token { kind, .. }) = self.peek_token() {
@@ -756,7 +750,7 @@ impl<'lex> Parser<'lex> {
                     if block_scope == 0 =>
                 {
                     return
-                }
+                },
                 TokKind::LCurlyBracket => block_scope += 1,
                 TokKind::RCurlyBracket if block_scope == 0 => return,
                 TokKind::RCurlyBracket => block_scope -= 1,
@@ -778,20 +772,17 @@ impl<'lex> Parser<'lex> {
             return None;
         };
 
-        Some(Stmt::While {
-            condition,
-            body: Box::new(body),
-        })
+        Some(Stmt::While { condition, body: Box::new(body) })
     }
 
-    /// Parse a return statement (ReturnStmt). Attempts to recover from a missing semicolon by
-    /// assuming one.
+    /// Parse a return statement (ReturnStmt). Attempts to recover from a
+    /// missing semicolon by assuming one.
     ///
     /// ReturnStmt:
     ///     return Expr ;
     fn parse_return(&mut self) -> Option<Stmt> {
         let retval = accept_token!(self,
-            TokKind::Semicolon => {None},
+            TokKind::Semicolon => None,
             {
                 let Some(expr) = self.parse_expr() else {
                     return None;
@@ -807,7 +798,8 @@ impl<'lex> Parser<'lex> {
         Some(Stmt::Return { retval })
     }
 
-    /// Parse an expression statement (ExprStmt). Does not attempt to recover from a missing semicolon.
+    /// Parse an expression statement (ExprStmt). Does not attempt to recover
+    /// from a missing semicolon.
     ///
     /// ExprStmt:
     ///     Expr ;
@@ -824,8 +816,8 @@ impl<'lex> Parser<'lex> {
         Some(Stmt::Expr(expr))
     }
 
-    /// Parse a statement (Stmt). Resynchronizes to the next nearest statement upon failure (see
-    /// [resync_stmt]).
+    /// Parse a statement (Stmt). Resynchronizes to the next nearest statement
+    /// upon failure (see [resync_stmt]).
     ///
     /// Stmt:
     ///     WhileStmt
@@ -835,10 +827,10 @@ impl<'lex> Parser<'lex> {
     ///     IfStmt
     fn parse_stmt(&mut self) -> Option<Stmt> {
         let Some(stmt) = accept_token!(self,
-            TokKind::Keyword(KwKind::Fn) => {self.parse_fn_decl()},
-            TokKind::Keyword(KwKind::Let) => {self.parse_var_decl()},
-            TokKind::Keyword(KwKind::While) => {self.parse_while()},
-            TokKind::Keyword(KwKind::Return) => {self.parse_return()},
+            TokKind::Keyword(KwKind::Fn) => self.parse_fn_decl(),
+            TokKind::Keyword(KwKind::Let) => self.parse_var_decl(),
+            TokKind::Keyword(KwKind::While) => self.parse_while(),
+            TokKind::Keyword(KwKind::Return) => self.parse_return(),
             {self.parse_expr_stmt()}
         ) else {
             self.resync_stmt();
@@ -850,9 +842,10 @@ impl<'lex> Parser<'lex> {
 
     /// Parse the lexer tokens into an abstract syntax tree (AST).
     ///
-    /// Always produces a valid AST, errors are captured into the [DiagEngine] and available through
-    /// the [Diag] interface. If an error is present in the [DiagEngine] after parsing, the AST
-    /// should be presumed to be incomplete/logically incorrect.
+    /// Always produces a valid AST, errors are captured into the [DiagEngine]
+    /// and available through the [Diag] interface. If an error is present
+    /// in the [DiagEngine] after parsing, the AST should be presumed to be
+    /// incomplete/logically incorrect.
     pub fn parse(&mut self) -> Vec<Stmt> {
         let mut stmts = Vec::new();
         while let &Some(Token { kind, span }) = self.peek_token() {
@@ -862,7 +855,7 @@ impl<'lex> Parser<'lex> {
                     if stmt.is_some() {
                         stmts.push(stmt.unwrap())
                     }
-                }
+                },
                 _kind => {
                     self.diag_engine.diag(MsgKind::UnexpectedToken, span);
                     self.next_token();
@@ -876,16 +869,27 @@ impl<'lex> Parser<'lex> {
 
 #[cfg(test)]
 mod test {
+    use crate::parse::ast::Stmt;
+    use crate::util::diag::DiagMsg;
     use crate::util::file::Span;
 
+    fn parse_buf(buf: &str) -> (Vec<Stmt>, Vec<DiagMsg>) {
+        let buf_span = Span::new_from_buf(buf).unwrap();
+        let mut parser = buf_span.parser();
+
+        (
+            parser.parse(),
+            parser.diag_engine.messages().cloned().collect()
+        )
+    }
     #[test]
     fn test_parser() {
-        let span = Span::new_from_buf(
-            "fn print_int(val: u32);
+        let buf = "fn print_int(val: u32);
 
 fn factorial(x: u32) -> u32 {
     let res: u32 = 0;
     let i: u32 = 1;
+    let s = \"ABCD\";
 
     while i <= x {
         res = res * i;
@@ -897,11 +901,11 @@ fn factorial(x: u32) -> u32 {
 
 fn main(args: str[]) -> u32 {
     print_int(factorial(parse_u32(args[0])));
-}",
-        )
-        .unwrap();
-        let mut parser = span.parser();
-        println!("{:#?}", parser.parse());
-        println!("{:?}", parser.diag_engine.messages())
+}";
+        let (ast, msgs) = parse_buf(buf);
+        println!("{:#?}", ast);
+        for msg in msgs {
+            println!("{}", msg);
+        }
     }
 }
