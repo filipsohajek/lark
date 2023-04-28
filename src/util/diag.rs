@@ -2,7 +2,7 @@ use crate::util::file::Span;
 use std::slice::Iter;
 use crate::lex::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MsgKind {
     IntegerConstantOverflow,
     InvalidEscapeSequence,
@@ -22,7 +22,7 @@ pub enum MsgKind {
     UnexpectedToken,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct DiagMsg {
     pub kind: MsgKind,
     pub span: Span,
